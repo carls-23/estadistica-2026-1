@@ -1,0 +1,553 @@
+---
+title: "Exposición final"
+author: "Chiclla ramirez Carlos"
+format: html
+editor: visual
+---
+
+## Quarto
+
+#LLAMANDO PAQUETES
+
+
+paquetes <- c(
+  "readxl",      # leer archivos Excel
+  "dplyr",       # manipulación de datos
+  "ggplot2",     # gráficos
+  "janitor",     # tablas limpias
+  "epitools",    # odds ratio
+  "broom",       # ordenar resultados de modelos
+  "gtsummary",   # tablas bonitas de regresión
+  "writexl",     # exportar tablas a Excel
+  "forcats"      # ordenar categorías
+)
+
+instalar <- paquetes[!(paquetes %in% installed.packages()[,"Package"])]
+if(length(instalar) > 0){
+  install.packages(instalar)
+}
+
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(janitor)
+library(epitools)
+library(broom)
+library(gtsummary)
+library(writexl)
+library(forcats)
+
+#CREAR CARPETA DE RESULTADOS
+
+if(!dir.exists("resultados_parasitos")){
+  dir.create("resultados_parasitos")
+}
+
+#IMPORTAR LA BASE DE DATOS
+
+archivo <- "base_parasitologia_perros_teorica.xlsx"
+
+datos <- read_excel(archivo, sheet = "base_parasitologia_perros") %>%
+  clean_names()
+
+head(datos)
+str(datos)
+
+#PREPARACIÓN DE VARIABLES
+
+datos <- datos %>%
+  mutate(
+    grupo_edad = factor(grupo_edad, levels = c("Cachorro (<12 meses)", "Adulto (12-84 meses)", "Senior (>84 meses)")),
+    sexo = factor(sexo),
+    raza = factor(raza),
+    condicion_corporal = factor(condicion_corporal, levels = c("Baja", "Normal", "Alta")),
+    desparasitado_ultimos_3m = factor(desparasitado_ultimos_3m, levels = c("Si", "No")),
+    vive_libre = factor(vive_libre, levels = c("No", "Si")),
+    acceso_bosque = factor(acceso_bosque, levels = c("No", "Si")),
+    convive_gatos = factor(convive_gatos, levels = c("No", "Si")),
+    ectoparasitos = factor(ectoparasitos, levels = c("No", "Si")),
+    parasitosis_gastrointestinal = factor(parasitosis_gastrointestinal, levels = c("No", "Si")),
+    ancylostoma = factor(ancylostoma, levels = c("No", "Si")),
+    toxocara = factor(toxocara, levels = c("No", "Si")),
+    trichuris = factor(trichuris, levels = c("No", "Si")),
+    infeccion_mixta = factor(infeccion_mixta, levels = c("No", "Si"))
+  )
+#DESCRIPCIÓN DE LA POBLACIÓN
+
+resumen_numericas <- datos %>%
+  summarise(
+    n = n(),
+    edad_media = mean(edad_meses, na.rm = TRUE),
+    edad_sd = sd(edad_meses, na.rm = TRUE),
+    edad_mediana = median(edad_meses, na.rm = TRUE),
+    peso_media = mean(peso_kg, na.rm = TRUE),
+    peso_sd = sd(peso_kg, na.rm = TRUE),
+    gatos_media = mean(numero_gatos_hogar, na.rm = TRUE),
+    gatos_sd = sd(numero_gatos_hogar, na.rm = TRUE)
+  )
+
+resumen_numericas
+
+# Variables categóricas: sexo, raza, grupo de edad, condición corporal, etc.
+
+tabla_sexo <- datos %>% tabyl(sexo) %>% adorn_pct_formatting(digits = 1)
+tabla_raza <- datos %>% tabyl(raza) %>% adorn_pct_formatting(digits = 1)
+tabla_grupo_edad <- datos %>% tabyl(grupo_edad) %>% adorn_pct_formatting(digits = 1)
+tabla_condicion <- datos %>% tabyl(condicion_corporal) %>% adorn_pct_formatting(digits = 1)
+tabla_desparasitacion <- datos %>% tabyl(desparasitado_ultimos_3m) %>% adorn_pct_formatting(digits = 1)
+
+tabla_sexo
+tabla_raza
+tabla_grupo_edad
+tabla_condicion
+tabla_desparasitacion
+
+#GRÁFICOS DESCRIPTIVOS DEL OE1
+
+# Gráfico 1: Histograma de edad
+p1 <- ggplot(datos, aes(x = edad_meses)) +
+  geom_histogram(bins = 20) +
+  labs(
+    title = "Distribución de la edad de los perros",
+    x = "Edad (meses)",
+    y = "Número de perros"
+  ) +
+  theme_minimal()
+
+ggsave("resultados_parasitos/grafico_01_histograma_edad.png", p1, width = 8, height = 5)
+
+# Gráfico 2: Distribución por sexo
+p2 <- ggplot(datos, aes(x = sexo)) +
+  geom_bar() +
+  labs(
+    title = "Distribución de perros según sexo",
+    x = "Sexo",
+    y = "Número de perros"
+  ) +
+  theme_minimal()
+
+ggsave("resultados_parasitos/grafico_02_sexo.png", p2, width = 7, height = 5)
+
+# Gráfico 3: Distribución por grupo etario
+p3 <- ggplot(datos, aes(x = grupo_edad)) +
+  geom_bar() +
+  labs(
+    title = "Distribución de perros según grupo etario",
+    x = "Grupo etario",
+    y = "Número de perros"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+
+ggsave("resultados_parasitos/grafico_03_grupo_edad.png", p3, width = 8, height = 5)
+
+# 7. OE2: PREVALENCIA GENERAL DE PARASITOSIS GASTROINTESTINAL
+
+# La prevalencia se calcula como: número de positivos / total evaluado x 100.
+
+tabla_prevalencia_general <- datos %>%
+  tabyl(parasitosis_gastrointestinal) %>%
+  adorn_pct_formatting(digits = 1)
+
+tabla_prevalencia_general
+
+prev_general <- datos %>%
+  summarise(
+    total = n(),
+    positivos = sum(parasitosis_gastrointestinal == "Si"),
+    prevalencia_porcentaje = round(positivos / total * 100, 1)
+  )
+
+prev_general
+
+# Gráfico 4: Prevalencia general
+p4 <- ggplot(datos, aes(x = parasitosis_gastrointestinal)) +
+  geom_bar() +
+  labs(
+    title = "Prevalencia general de parasitosis gastrointestinal",
+    x = "Parasitosis gastrointestinal",
+    y = "Número de perros"
+  ) +
+  theme_minimal()
+
+ggsave("resultados_parasitos/grafico_04_prevalencia_general.png", p4, width = 7, height = 5)
+
+# 8. OE3: PREVALENCIA DE PARÁSITOS ESPECÍFICOS
+
+# Se evalúa la frecuencia de los principales parásitos: Ancylostoma, Toxocara,
+# Trichuris e infecciones mixtas.
+
+prevalencias_parasitos <- datos %>%
+  summarise(
+    ancylostoma = mean(ancylostoma == "Si") * 100,
+    toxocara = mean(toxocara == "Si") * 100,
+    trichuris = mean(trichuris == "Si") * 100,
+    infeccion_mixta = mean(infeccion_mixta == "Si") * 100
+  ) %>%
+  tidyr::pivot_longer(
+    cols = everything(),
+    names_to = "parasito",
+    values_to = "prevalencia"
+  ) %>%
+  mutate(prevalencia = round(prevalencia, 1))
+
+prevalencias_parasitos
+
+# Gráfico 5: Prevalencias por tipo de parásito
+p5 <- ggplot(prevalencias_parasitos, aes(x = parasito, y = prevalencia)) +
+  geom_col() +
+  labs(
+    title = "Prevalencia de parásitos gastrointestinales principales",
+    x = "Parásito / tipo de infección",
+    y = "Prevalencia (%)"
+  ) +
+  theme_minimal()
+
+ggsave("resultados_parasitos/grafico_05_prevalencia_parasitos.png", p5, width = 8, height = 5)
+
+
+# 9. FUNCIÓN AUXILIAR PARA CHI-CUADRADO / FISHER Y ODDS RATIO
+
+# Esta función ayuda a repetir el mismo análisis para varias variables.
+# Para tablas 2x2 calcula OR. Si hay frecuencias esperadas pequeñas, usa Fisher.
+
+analisis_bivariado <- function(variable_exposicion, variable_resultado){
+  tabla <- table(variable_exposicion, variable_resultado)
+  print(tabla)
+  
+  prueba_chi <- suppressWarnings(chisq.test(tabla))
+  
+  if(any(prueba_chi$expected < 5)){
+    prueba <- fisher.test(tabla)
+    metodo <- "Fisher exact test"
+  } else {
+    prueba <- prueba_chi
+    metodo <- "Chi-cuadrado"
+  }
+  
+  print(metodo)
+  print(prueba)
+  
+  if(all(dim(tabla) == c(2,2))){
+    print(epitools::oddsratio(tabla))
+  } else {
+    message("La tabla no es 2x2; el OR simple no se calcula directamente con esta función.")
+  }
+}
+
+# 10. OE4: ASOCIACIÓN ENTRE GRUPO ETARIO Y PARASITOSIS / TOXOCARA
+
+# 10.1 Grupo etario vs parasitosis general
+tabla_edad_parasitosis <- table(datos$grupo_edad, datos$parasitosis_gastrointestinal)
+tabla_edad_parasitosis
+chisq.test(tabla_edad_parasitosis)
+
+# Gráfico 6: proporción de parasitosis según grupo etario
+p6 <- ggplot(datos, aes(x = grupo_edad, fill = parasitosis_gastrointestinal)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Parasitosis gastrointestinal según grupo etario",
+    x = "Grupo etario",
+    y = "Proporción",
+    fill = "Parasitosis"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+
+ggsave("resultados_parasitos/grafico_06_parasitosis_por_grupo_edad.png", p6, width = 8, height = 5)
+
+# 10.2 Cachorros vs no cachorros para Toxocara
+# El artículo de referencia encontró mayor probabilidad de Toxocara en perros jóvenes.
+
+datos <- datos %>%
+  mutate(cachorro = factor(ifelse(edad_meses < 12, "Si", "No"), levels = c("No", "Si")))
+
+analisis_bivariado(datos$cachorro, datos$toxocara)
+
+# Gráfico 7: Toxocara según cachorro/no cachorro
+p7 <- ggplot(datos, aes(x = cachorro, fill = toxocara)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Toxocara según condición de cachorro",
+    x = "¿Es cachorro menor de 12 meses?",
+    y = "Proporción",
+    fill = "Toxocara"
+  ) +
+  theme_minimal()
+
+ggsave("resultados_parasitos/grafico_07_toxocara_cachorros.png", p7, width = 7, height = 5)
+
+
+# 11. OE5: OTROS FACTORES ASOCIADOS
+
+# 11.1 Condición corporal vs infección mixta
+analisis_bivariado(datos$condicion_corporal, datos$infeccion_mixta)
+
+p8 <- ggplot(datos, aes(x = condicion_corporal, fill = infeccion_mixta)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Infección mixta según condición corporal",
+    x = "Condición corporal",
+    y = "Proporción",
+    fill = "Infección mixta"
+  ) +
+  theme_minimal()
+
+ggsave("resultados_parasitos/grafico_08_infeccion_mixta_condicion.png", p8, width = 7, height = 5)
+
+# 11.2 Sexo vs infección mixta
+analisis_bivariado(datos$sexo, datos$infeccion_mixta)
+
+p9 <- ggplot(datos, aes(x = sexo, fill = infeccion_mixta)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Infección mixta según sexo",
+    x = "Sexo",
+    y = "Proporción",
+    fill = "Infección mixta"
+  ) +
+  theme_minimal()
+
+ggsave("resultados_parasitos/grafico_09_infeccion_mixta_sexo.png", p9, width = 7, height = 5)
+
+# 11.3 Raza vs Trichuris
+analisis_bivariado(datos$raza, datos$trichuris)
+
+p10 <- ggplot(datos, aes(x = raza, fill = trichuris)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Trichuris según tipo racial",
+    x = "Raza",
+    y = "Proporción",
+    fill = "Trichuris"
+  ) +
+  theme_minimal()
+
+ggsave("resultados_parasitos/grafico_10_trichuris_raza.png", p10, width = 7, height = 5)
+
+# 11.4 Número de gatos según Trichuris
+p11 <- ggplot(datos, aes(x = trichuris, y = numero_gatos_hogar)) +
+  geom_boxplot() +
+  labs(
+    title = "Número de gatos en el hogar según presencia de Trichuris",
+    x = "Trichuris",
+    y = "Número de gatos en el hogar"
+  ) +
+  theme_minimal()
+
+ggsave("resultados_parasitos/grafico_11_gatos_trichuris.png", p11, width = 7, height = 5)
+
+wilcox.test(numero_gatos_hogar ~ trichuris, data = datos)
+
+
+# 12. ODDS RATIO CRUDOS CON MODELOS LOGÍSTICOS SIMPLES
+
+# Otra forma de obtener OR crudos es usando modelos logísticos simples.
+# Esto es útil cuando la exposición tiene más de dos categorías.
+
+modelo_crudo_edad <- glm(parasitosis_gastrointestinal ~ grupo_edad,
+                         data = datos, family = binomial)
+
+modelo_crudo_condicion <- glm(parasitosis_gastrointestinal ~ condicion_corporal,
+                              data = datos, family = binomial)
+
+modelo_crudo_desparasitacion <- glm(parasitosis_gastrointestinal ~ desparasitado_ultimos_3m,
+                                    data = datos, family = binomial)
+
+# Convertir coeficientes a OR
+or_crudos <- list(
+  edad = tidy(modelo_crudo_edad, exponentiate = TRUE, conf.int = TRUE),
+  condicion = tidy(modelo_crudo_condicion, exponentiate = TRUE, conf.int = TRUE),
+  desparasitacion = tidy(modelo_crudo_desparasitacion, exponentiate = TRUE, conf.int = TRUE)
+)
+
+or_crudos
+
+# 13. OE6: REGRESIÓN LOGÍSTICA MULTIVARIADA
+
+# Modelo principal:
+# Resultado: parasitosis gastrointestinal general (Si/No).
+# Factores incluidos: grupo etario, sexo, raza, condición corporal,
+# desparasitación, vida libre, acceso a bosque, convivencia con gatos,
+# número de gatos y ectoparásitos.
+
+modelo_general <- glm(
+  parasitosis_gastrointestinal ~ grupo_edad + sexo + raza + condicion_corporal +
+    desparasitado_ultimos_3m + vive_libre + acceso_bosque + convive_gatos +
+    numero_gatos_hogar + ectoparasitos,
+  data = datos,
+  family = binomial
+)
+
+summary(modelo_general)
+
+# OR ajustados e intervalos de confianza
+or_ajustados_general <- tidy(modelo_general, exponentiate = TRUE, conf.int = TRUE) %>%
+  mutate(across(where(is.numeric), round, 3))
+
+or_ajustados_general
+
+# Tabla bonita para informe
+tabla_modelo_general <- tbl_regression(
+  modelo_general,
+  exponentiate = TRUE,
+  label = list(
+    grupo_edad ~ "Grupo etario",
+    sexo ~ "Sexo",
+    raza ~ "Raza",
+    condicion_corporal ~ "Condición corporal",
+    desparasitado_ultimos_3m ~ "Desparasitación últimos 3 meses",
+    vive_libre ~ "Vive libre",
+    acceso_bosque ~ "Acceso a bosque",
+    convive_gatos ~ "Convive con gatos",
+    numero_gatos_hogar ~ "Número de gatos en hogar",
+    ectoparasitos ~ "Ectoparásitos"
+  )
+)
+
+tabla_modelo_general
+
+
+# 14. MODELOS SECUNDARIOS PARA PARÁSITOS ESPECÍFICOS
+
+# Estos modelos ayudan a responder objetivos más específicos, parecidos al artículo.
+
+# 14.1 Modelo para Toxocara
+modelo_toxocara <- glm(
+  toxocara ~ cachorro + sexo + condicion_corporal + desparasitado_ultimos_3m,
+  data = datos,
+  family = binomial
+)
+
+or_toxocara <- tidy(modelo_toxocara, exponentiate = TRUE, conf.int = TRUE) %>%
+  mutate(across(where(is.numeric), round, 3))
+
+or_toxocara
+
+# 14.2 Modelo para Trichuris
+modelo_trichuris <- glm(
+  trichuris ~ raza + numero_gatos_hogar + condicion_corporal,
+  data = datos,
+  family = binomial
+)
+
+or_trichuris <- tidy(modelo_trichuris, exponentiate = TRUE, conf.int = TRUE) %>%
+  mutate(across(where(is.numeric), round, 3))
+
+or_trichuris
+
+# 14.3 Modelo para infección mixta
+modelo_mixta <- glm(
+  infeccion_mixta ~ sexo + condicion_corporal + edad_meses + desparasitado_ultimos_3m,
+  data = datos,
+  family = binomial
+)
+
+or_mixta <- tidy(modelo_mixta, exponentiate = TRUE, conf.int = TRUE) %>%
+  mutate(across(where(is.numeric), round, 3))
+
+or_mixta
+
+
+# 15. FOREST PLOT DEL MODELO PRINCIPAL
+
+# Este gráfico muestra los OR ajustados del modelo principal.
+# Interpretación:
+# OR > 1: mayor probabilidad de parasitosis.
+# OR < 1: menor probabilidad de parasitosis.
+# Si el intervalo de confianza cruza 1, no hay evidencia estadística clara.
+
+forest_general <- or_ajustados_general %>%
+  filter(term != "(Intercept)") %>%
+  mutate(term = fct_reorder(term, estimate))
+
+p12 <- ggplot(forest_general, aes(x = estimate, y = term)) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  scale_x_log10() +
+  labs(
+    title = "Forest plot de OR ajustados - parasitosis gastrointestinal",
+    x = "Odds Ratio ajustado (escala logarítmica)",
+    y = "Variable"
+  ) +
+  theme_minimal()
+
+ggsave("resultados_parasitos/grafico_12_forest_plot_modelo_general.png", p12, width = 9, height = 6)
+
+
+# 16. PROBABILIDADES PREDICHAS
+
+# Calculamos la probabilidad estimada de parasitosis para cada perro según el
+# modelo multivariado. Esto ayuda a entender el modelo de forma más práctica.
+
+datos$probabilidad_predicha <- predict(modelo_general, type = "response")
+
+# Gráfico 13: probabilidad predicha según condición corporal
+p13 <- ggplot(datos, aes(x = condicion_corporal, y = probabilidad_predicha)) +
+  geom_boxplot() +
+  labs(
+    title = "Probabilidad predicha de parasitosis según condición corporal",
+    x = "Condición corporal",
+    y = "Probabilidad predicha"
+  ) +
+  theme_minimal()
+
+ggsave("resultados_parasitos/grafico_13_probabilidad_condicion.png", p13, width = 7, height = 5)
+
+
+# 17. EXPORTAR TABLAS A EXCEL
+
+# Guardamos las tablas más importantes para que puedan usarse en el informe.
+
+write_xlsx(
+  list(
+    resumen_numericas = resumen_numericas,
+    prevalencia_general = prev_general,
+    prevalencias_parasitos = prevalencias_parasitos,
+    or_ajustados_general = or_ajustados_general,
+    or_toxocara = or_toxocara,
+    or_trichuris = or_trichuris,
+    or_mixta = or_mixta
+  ),
+  path = "resultados_parasitos/tablas_resultados_parasitologia.xlsx"
+)
+
+
+# 18. RESPUESTAS AUTOMÁTICAS A LOS OBJETIVOS
+
+# Esta sección genera un resumen en texto con los resultados principales.
+# Los estudiantes deben leerlo, ajustarlo y convertirlo en redacción académica.
+
+respuesta_objetivos <- c(
+  "RESPUESTAS A LOS OBJETIVOS",
+  "",
+  paste0("OE1. Se evaluaron ", nrow(datos), " perros. La edad media fue de ",
+         round(mean(datos$edad_meses),1), " meses y el peso medio fue de ",
+         round(mean(datos$peso_kg),1), " kg."),
+  paste0("OE2. La prevalencia general de parasitosis gastrointestinal fue de ",
+         prev_general$prevalencia_porcentaje, "%.") ,
+  paste0("OE3. Las prevalencias específicas fueron: Ancylostoma ",
+         prevalencias_parasitos$prevalencia[prevalencias_parasitos$parasito == "ancylostoma"],
+         "%, Toxocara ",
+         prevalencias_parasitos$prevalencia[prevalencias_parasitos$parasito == "toxocara"],
+         "%, Trichuris ",
+         prevalencias_parasitos$prevalencia[prevalencias_parasitos$parasito == "trichuris"],
+         "% e infección mixta ",
+         prevalencias_parasitos$prevalencia[prevalencias_parasitos$parasito == "infeccion_mixta"], "%.") ,
+  "OE4. Se evaluó la asociación entre grupo etario y parasitosis, además de cachorro/no cachorro con Toxocara. Revisar los valores p y OR generados en consola.",
+  "OE5. Se evaluaron condición corporal, sexo, raza y número de gatos en el hogar como posibles factores asociados a infecciones específicas.",
+  "OE6. La regresión logística multivariada permitió estimar OR ajustados. Un OR mayor a 1 sugiere mayor probabilidad de parasitosis, mientras que un OR menor a 1 sugiere menor probabilidad.",
+  "",
+  "Nota: Esta base es simulada con fines docentes. Los resultados deben compararse con el artículo de referencia, no interpretarse como datos reales de campo."
+)
+
+writeLines(respuesta_objetivos, "resultados_parasitos/respuestas_objetivos.txt")
+
+#    - Forest plot: resume visualmente los OR del modelo.
+
+
+message("Análisis finalizado. Revisa la carpeta 'resultados_parasitos'.")
+
+
+
